@@ -1,54 +1,74 @@
-import requests
-from bs4 import BeautifulSoup
 import json
+from bs4 import BeautifulSoup
+import pandas as pd
+import requests
+import streamlit as st
 
-def main():
-    print("--- Web Scraper Started ---")
-    
-    # Target URL (Using quotes sandbox site for reliable practice)
-    url = "http://quotes.toscrape.com/"
-    
-    # Basic headers to avoid getting blocked
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-    }
-    
-    print(f"Fetching data from: {url}")
+st.set_page_config(page_title="Web Scraper Studio", page_icon="🕷️", layout="wide")
+
+st.title("🕷️ Web Scraper for Headlines & Quotes")
+st.markdown("Extract quotes safely using **Requests & BeautifulSoup**.")
+
+# Target URL
+target_url = "http://quotes.toscrape.com/"
+st.write(f"**Target Website:** {target_url}")
+
+headers = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    )
+}
+
+if st.button("🚀 Run Scraper Now", use_container_width=True):
+  with st.spinner("Fetching and parsing HTML..."):
     try:
-        response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status() # Check for HTTP errors
-    except requests.exceptions.RequestException as e:
-        print(f"Failed to fetch page: {e}")
-        return
+      response = requests.get(target_url, headers=headers, timeout=10)
+      response.raise_for_status()
 
-    # Parse page content with BeautifulSoup
-    soup = BeautifulSoup(response.text, 'html.parser')
-    quotes_data = []
+      soup = BeautifulSoup(response.text, "html.parser")
+      quotes_data = []
 
-    # Extracting elements based on HTML structure
-    items = soup.find_all("div", class_="quote")
-    
-    for item in items:
-        quote_text = item.find("span", class_="text").get_text(strip=True)
-        author_name = item.find("small", class_="author").get_text(strip=True)
-        
-        # Extracting multiple tags for each quote
-        tag_elements = item.find_all("a", class_="tag")
-        tags_list = [tag.get_text(strip=True) for tag in tag_elements]
-        
-        # Storing into dictionary
-        quotes_data.append({
-            "quote": quote_text,
-            "author": author_name,
-            "tags": tags_list
-        })
+      items = soup.find_all("div", class_="quote")
+      for item in items:
+        text = item.find("span", class_="text").get_text(strip=True)
+        author = item.find("small", class_="author").get_text(strip=True)
+        tags = [t.get_text(strip=True) for t in item.find_all("a", class_="tag")]
+        quotes_data.append({"quote": text, "author": author, "tags": tags})
 
-    # Saving the extracted data into a clean JSON file
-    output_file = "headlines_and_quotes.json"
-    with open(output_file, 'w', encoding='utf-8') as f:
-        json.dump(quotes_data, f, indent=4, ensure_ascii=False)
+      st.session_state["data"] = quotes_data
+      st.success(f"Successfully scraped {len(quotes_data)} items!")
 
-    print(f"Success! {len(quotes_data)} records saved to {output_file}")
+    except Exception as e:
+      st.error(f"Error: {e}")
 
-if __name__ == "__main__":
-    main()
+# Display data if scraped
+if "data" in st.session_state and st.session_state["data"]:
+  data = st.session_state["data"]
+
+  st.markdown("### 📊 Extracted Results")
+
+  # Tabs for view
+  tab1, tab2 = st.tabs(["📋 Card View", "📦 JSON Download"])
+
+  with tab1:
+    for item in data:
+      st.markdown(
+          f"""
+            <div style="background: #1e293b; padding: 15px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid #6366f1;">
+                <p style="color: #f8fafc; font-style: italic;">{item['quote']}</p>
+                <p style="color: #94a3b8; font-size: 0.9rem;"><b>Author:</b> {item['author']}</p>
+                <p style="color: #6366f1; font-size: 0.8rem;"><b>Tags:</b> {', '.join(item['tags'])}</p>
+            </div>
+            """,
+          unsafe_allow_html=True,
+      )
+
+  with tab2:
+    st.json(data)
+    json_str = json.dumps(data, indent=4, ensure_ascii=False)
+    st.download_button(
+        "📥 Download JSON File",
+        json_str,
+        file_name="quotes.json",
+        mime="application/json",
+    )
